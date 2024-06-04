@@ -477,7 +477,7 @@ class HtmlFormatter
 
   protected function GetSourceEncoding()
   {
-    if (!is_null($this->state->font)) {
+    if (!is_null($this->state?->font)) {
       if (isset(State::$fonttbl[$this->state->font]->codepage)) {
         return State::$fonttbl[$this->state->font]->codepage;
 
