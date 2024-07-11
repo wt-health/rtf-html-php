@@ -133,11 +133,26 @@ class HtmlFormatter
     // The Font Table group contains the control word "fonttbl" and some
     // subgroups. Go through the subgroups, ignoring the "fonttbl"
     // identifier.
+    $tempGroup = new \RtfHtmlPhp\Group();
+
     foreach($fontTblGrp->children as $child) {
-      // Ignore non-group, which should be the fonttbl identified word.
-      if(!($child instanceof \RtfHtmlPhp\Group)) continue;
-      // Load the font specification in the subgroup:
-      $this->LoadFont($child);
+      // Ignore the fonttbl word.
+      if(($child instanceof \RtfHtmlPhp\ControlWord) && $child->word === 'fonttbl') continue;
+
+      if ($child instanceof \RtfHtmlPhp\Group) {
+        $this->LoadFont($child);
+        $tempGroup->children = [];
+      } elseif ($child instanceof \RtfHtmlPhp\ControlWord) {
+        $tempGroup->children[] = $child;
+      } else {
+        // This is a delimiter ';' or a font name
+        if ($child->text !== ';') {
+          $tempGroup->children[] = $child;
+        }
+
+        $this->LoadFont($tempGroup);
+        $tempGroup->children = [];
+      }
     }
   }
 
