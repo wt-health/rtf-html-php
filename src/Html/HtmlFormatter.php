@@ -252,8 +252,15 @@ class HtmlFormatter
     $this->state = clone $this->state;
     array_push($this->states, $this->state);
 
+    $previousEntries = [];
+
     foreach($group->children as $child) {
-      $this->FormatEntry($child);
+      try {
+        $this->FormatEntry($child, $previousEntries);
+        $previousEntries = [];
+      } catch(\ErrorException $ex) {
+        $previousEntries[] = $child;
+      }
     }
 
     // Pop state from stack
@@ -272,11 +279,11 @@ class HtmlFormatter
       }
   }
 
-  protected function FormatEntry($entry)
+  protected function FormatEntry($entry, $previousEntries)
   {
     if($entry instanceof \RtfHtmlPhp\Group) $this->ProcessGroup($entry);
     elseif($entry instanceof \RtfHtmlPhp\ControlWord) $this->FormatControlWord($entry);
-    elseif($entry instanceof \RtfHtmlPhp\ControlSymbol) $this->FormatControlSymbol($entry);
+    elseif($entry instanceof \RtfHtmlPhp\ControlSymbol) $this->FormatControlSymbol($entry, $previousEntries);
     elseif($entry instanceof \RtfHtmlPhp\Text) $this->FormatText($entry);
   }
 
@@ -387,12 +394,18 @@ class HtmlFormatter
     }
   }
 
-  protected function DecodeUnicode($code, $srcEnc = 'UTF-8')
+  protected function DecodeUnicode($code, $srcEnc = 'UTF-8', $previousEntries = [])
   {
     $utf8 = '';
 
+    $previousCodes = array_reduce($previousEntries, fn ($prefix, $entry) => $prefix.chr($entry->parameter), '');
+
     if ($srcEnc != 'UTF-8') { // convert character to Unicode
-      $utf8 = iconv($srcEnc, 'UTF-8', chr($code));
+      $utf8 = iconv($srcEnc, 'UTF-8', $previousCodes.chr($code));
+
+      if ($utf8 === false) {
+        throw new \ErrorException("Failed to convert $srcEnc code $code to UTF-8");
+      }
     }
 
     if ($this->encoding == 'HTML-ENTITIES') {
@@ -465,11 +478,11 @@ class HtmlFormatter
       $this->CloseTag($tag);
   }
 
-  protected function FormatControlSymbol($symbol)
+  protected function FormatControlSymbol($symbol, $previousEntries)
   {
     if($symbol->symbol == '\'') {
       $enc = $this->GetSourceEncoding();
-      $uchar = $this->DecodeUnicode($symbol->parameter, $enc);
+      $uchar = $this->DecodeUnicode($symbol->parameter, $enc, $previousEntries);
       $this->Write($uchar);
     }elseif ($symbol->symbol == '~') {
       $this->Write("&nbsp;"); // Non breaking space
