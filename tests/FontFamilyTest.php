@@ -15,7 +15,7 @@ final class FontFamilyTest extends TestCase
     $html = $formatter->Format($document);    
 
     $this->assertEquals(
-      '<p><span style="font-family:Arial, sans-serif;font-size:15px;">Hello, world.</span></p><p></p>',
+      '<p><span style="font-family:Arial, sans-serif;font-size:15px;">Hello, world.</span></p>',
       $html
     );
   }  
