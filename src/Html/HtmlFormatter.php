@@ -133,6 +133,8 @@ class HtmlFormatter
     // The Font Table group contains the control word "fonttbl" and some
     // subgroups. Go through the subgroups, ignoring the "fonttbl"
     // identifier.
+
+    // Temporary group to group and load ungrouped font control words together when optional braces are not used
     $tempGroup = new \RtfHtmlPhp\Group();
 
     foreach($fontTblGrp->children as $child) {
@@ -145,7 +147,7 @@ class HtmlFormatter
       } elseif ($child instanceof \RtfHtmlPhp\ControlWord) {
         $tempGroup->children[] = $child;
       } else {
-        // This is a delimiter ';' or a font name
+        // This is a font group delimiter ';' or a font name
         if ($child->text !== ';') {
           $tempGroup->children[] = $child;
         }
@@ -252,6 +254,7 @@ class HtmlFormatter
     $this->state = clone $this->state;
     array_push($this->states, $this->state);
 
+    // Store previous entries that failed to parse to try and parse them together with the following entries to handle multibyte characters
     $previousEntries = [];
 
     foreach($group->children as $child) {
