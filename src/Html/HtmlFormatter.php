@@ -133,11 +133,28 @@ class HtmlFormatter
     // The Font Table group contains the control word "fonttbl" and some
     // subgroups. Go through the subgroups, ignoring the "fonttbl"
     // identifier.
+
+    // Temporary group to group and load ungrouped font control words together when optional braces are not used
+    $tempGroup = new \RtfHtmlPhp\Group();
+
     foreach($fontTblGrp->children as $child) {
-      // Ignore non-group, which should be the fonttbl identified word.
-      if(!($child instanceof \RtfHtmlPhp\Group)) continue;
-      // Load the font specification in the subgroup:
-      $this->LoadFont($child);
+      // Ignore the fonttbl word.
+      if(($child instanceof \RtfHtmlPhp\ControlWord) && $child->word === 'fonttbl') continue;
+
+      if ($child instanceof \RtfHtmlPhp\Group) {
+        $this->LoadFont($child);
+        $tempGroup->children = [];
+      } elseif ($child instanceof \RtfHtmlPhp\ControlWord) {
+        $tempGroup->children[] = $child;
+      } else {
+        // This is a font group delimiter ';' or a font name
+        if ($child->text !== ';') {
+          $tempGroup->children[] = $child;
+        }
+
+        $this->LoadFont($tempGroup);
+        $tempGroup->children = [];
+      }
     }
   }
 
@@ -237,8 +254,16 @@ class HtmlFormatter
     $this->state = clone $this->state;
     array_push($this->states, $this->state);
 
+    // Store previous entries that failed to parse to try and parse them together with the following entries to handle multibyte characters
+    $previousEntries = [];
+
     foreach($group->children as $child) {
-      $this->FormatEntry($child);
+      try {
+        $this->FormatEntry($child, $previousEntries);
+        $previousEntries = [];
+      } catch(\ErrorException $ex) {
+        $previousEntries[] = $child;
+      }
     }
 
     // Pop state from stack
@@ -257,11 +282,11 @@ class HtmlFormatter
       }
   }
 
-  protected function FormatEntry($entry)
+  protected function FormatEntry($entry, $previousEntries)
   {
     if($entry instanceof \RtfHtmlPhp\Group) $this->ProcessGroup($entry);
     elseif($entry instanceof \RtfHtmlPhp\ControlWord) $this->FormatControlWord($entry);
-    elseif($entry instanceof \RtfHtmlPhp\ControlSymbol) $this->FormatControlSymbol($entry);
+    elseif($entry instanceof \RtfHtmlPhp\ControlSymbol) $this->FormatControlSymbol($entry, $previousEntries);
     elseif($entry instanceof \RtfHtmlPhp\Text) $this->FormatText($entry);
   }
 
@@ -372,12 +397,18 @@ class HtmlFormatter
     }
   }
 
-  protected function DecodeUnicode($code, $srcEnc = 'UTF-8')
+  protected function DecodeUnicode($code, $srcEnc = 'UTF-8', $previousEntries = [])
   {
     $utf8 = '';
 
+    $previousCodes = array_reduce($previousEntries, fn ($prefix, $entry) => $prefix.chr($entry->parameter), '');
+
     if ($srcEnc != 'UTF-8') { // convert character to Unicode
-      $utf8 = iconv($srcEnc, 'UTF-8', chr($code));
+      $utf8 = iconv($srcEnc, 'UTF-8', $previousCodes.chr($code));
+
+      if ($utf8 === false) {
+        throw new \ErrorException("Failed to convert $srcEnc code $code to UTF-8");
+      }
     }
 
     if ($this->encoding == 'HTML-ENTITIES') {
@@ -450,11 +481,11 @@ class HtmlFormatter
       $this->CloseTag($tag);
   }
 
-  protected function FormatControlSymbol($symbol)
+  protected function FormatControlSymbol($symbol, $previousEntries)
   {
     if($symbol->symbol == '\'') {
       $enc = $this->GetSourceEncoding();
-      $uchar = $this->DecodeUnicode($symbol->parameter, $enc);
+      $uchar = $this->DecodeUnicode($symbol->parameter, $enc, $previousEntries);
       $this->Write($uchar);
     }elseif ($symbol->symbol == '~') {
       $this->Write("&nbsp;"); // Non breaking space

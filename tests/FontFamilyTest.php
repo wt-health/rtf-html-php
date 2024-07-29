@@ -4,7 +4,7 @@ use PHPUnit\Framework\TestCase;
 use RtfHtmlPhp\Document;
 use RtfHtmlPhp\Html\HtmlFormatter;
 
-final class FontFamilyTestTest extends TestCase
+final class FontFamilyTest extends TestCase
 {
   public function testParseFontFamilyHtml(): void
   {
@@ -15,7 +15,7 @@ final class FontFamilyTestTest extends TestCase
     $html = $formatter->Format($document);    
 
     $this->assertEquals(
-      '<p><span style="font-family:Arial,sans-serif;font-size:15px;">Hello, world.</span></p>',
+      '<p><span style="font-family:Arial, sans-serif;font-size:15px;">Hello, world.</span></p>',
       $html
     );
   }  
